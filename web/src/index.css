@@ -65,4 +65,138 @@ button:focus-visible {
   button {
     background-color: #f9f9f9;
   }
+/* Tailwind v4 방식 */
+@import "tailwindcss";
+
+/* 선택사항: 기본 스타일 */
+body {
+  background-color: #f8fafc; /* gray-50 */
+  color: #111827; /* gray-900 */
+  font-family: system-ui, sans-serif;
+}
+@import "tailwindcss";
+
+/* ── 공구반장 테마: 레드/블랙/화이트 ───────────────────────────── */
+:root{
+  --g-red-500: #ef4444;   /* tailwind red-500 */
+  --g-red-600: #dc2626;   /* red-600 */
+  --g-red-700: #b91c1c;   /* red-700 */
+  --g-shadow-red: 0 6px 0 0 rgba(220, 38, 38, 1);  /* 버튼 바닥 그림자 */
+  --g-shadow-red-active: 0 3px 0 0 rgba(220, 38, 38, 1);
+}
+
+/* Tailwind v4에서도 @layer 사용 가능 */
+@layer components {
+  /* 가로형 카드 */
+  .card {
+    @apply rounded-2xl border border-black/10 bg-white shadow-sm hover:shadow-md transition;
+  }
+
+  /* 카테고리 뱃지 */
+  .pill {
+    @apply text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700;
+  }
+
+  /* 3D 프라이머리 버튼 (레드) */
+  .btn-3d {
+    @apply inline-flex items-center justify-center select-none
+           rounded-xl px-4 py-2 font-semibold text-white
+           transition duration-100;
+    background-image: linear-gradient(to bottom, var(--g-red-500), var(--g-red-600));
+    box-shadow: var(--g-shadow-red), 0 0 0 1px rgba(0,0,0,0.05);
+    transform: translateY(0);
+  }
+  .btn-3d:hover {
+    background-image: linear-gradient(to bottom, var(--g-red-500), var(--g-red-700));
+  }
+  .btn-3d:active {
+    transform: translateY(3px);
+    box-shadow: var(--g-shadow-red-active), 0 0 0 1px rgba(0,0,0,0.05);
+  }
+  .btn-3d:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, .25), var(--g-shadow-red);
+  }
+  .btn-3d:disabled {
+    @apply opacity-50 cursor-not-allowed;
+    transform: translateY(0);
+    box-shadow: 0 6px 0 0 rgba(156, 163, 175, 1), 0 0 0 1px rgba(0,0,0,0.05);
+    background-image: linear-gradient(to bottom, #9ca3af, #6b7280); /* 회색 */
+  }
+
+  /* 세컨더리 버튼 (블랙/화이트) */
+  .btn-ghost {
+    @apply inline-flex items-center justify-center rounded-xl px-4 py-2
+           border border-black/10 text-gray-900 bg-white hover:bg-gray-50;
+  }
+}
+
+/* --- Gonggu Banjang Theme (Mobile-first) ------------------------------- */
+:root{
+  --g-red-500:#ef4444; --g-red-600:#dc2626; --g-red-700:#b91c1c;
+  --g-shadow-red:0 6px 0 0 rgba(220,38,38,1);
+  --g-shadow-red-active:0 3px 0 0 rgba(220,38,38,1);
+}
+
+@layer components {
+  /* 컴팩트 카드 (모바일용) */
+  .tool-card {
+    @apply flex items-stretch gap-3 rounded-2xl border border-black/10 bg-white
+           shadow-sm hover:shadow-md active:shadow transition overflow-hidden;
+    min-height: 92px;
+    padding: .5rem .75rem;
+  }
+  .thumb {
+    @apply w-24 min-w-24 h-20 bg-gray-50 rounded-xl flex items-center justify-center;
+  }
+  .pill { @apply text-[10px] px-2 py-[3px] rounded-full bg-gray-100 text-gray-700; }
+
+
+/* --- Red Concept (깔끔/선명, 과한 빨강 그림자 제거) --- */
+:root{
+  --r-50:#fef2f2; --r-100:#fee2e2; --r-500:#ef4444; --r-600:#dc2626; --r-700:#b91c1c;
+}
+
+/* 카드/뱃지는 그대로 사용 가능 */
+@layer components {
+  /* 프라이머리(레드 필) - 그림자는 중립 회색 */
+  .btn-red {
+    @apply inline-flex items-center justify-center rounded-2xl px-4 py-3 font-semibold
+           text-white transition select-none;
+    background: linear-gradient(to bottom, var(--r-500), var(--r-600));
+    box-shadow: 0 6px 0 0 rgba(0,0,0,.12), 0 0 0 1px rgba(0,0,0,.05);
+    transform: translateY(0);
+  }
+  .btn-red:hover { background: linear-gradient(to bottom, var(--r-500), var(--r-700)); }
+  .btn-red:active { transform: translateY(2px); box-shadow: 0 4px 0 0 rgba(0,0,0,.12), 0 0 0 1px rgba(0,0,0,.05); }
+
+  /* 레드 아웃라인(기본은 흰 배경 + 레드 텍스트) */
+  .btn-red-outline {
+    @apply inline-flex items-center justify-center rounded-2xl px-4 py-2 font-semibold
+           border bg-white text-[color:var(--r-600)] border-[color:var(--r-600)]
+           hover:bg-[color:var(--r-50)] transition;
+  }
+
+  /* 바텀시트 */
+  .sheet-backdrop { @apply fixed inset-0 bg-black/40 z-50; animation: fadeIn .15s ease-out both; }
+  .sheet {
+    @apply fixed left-0 right-0 bottom-0 z-[60] bg-white rounded-t-3xl shadow-2xl;
+    max-height: 80vh; overflow: hidden; animation: slideUp .2s ease-out both;
+    display: grid; grid-template-rows: auto 1fr auto; /* header / body / footer */
+  }
+  .sheet-handle { @apply mx-auto my-2 h-1.5 w-10 rounded-full bg-gray-300; }
+  .sheet-header { @apply relative px-4 pt-1 pb-2; }
+  .sheet-body   { @apply px-4 overflow-y-auto pb-2; }
+  .sheet-footer { @apply px-4 py-3 border-t bg-white; position: sticky; bottom: 0; }
+
+  /* 우상단 X */
+  .sheet-close {
+    @apply absolute right-3 top-2 w-8 h-8 rounded-full border flex items-center justify-center
+           bg-white hover:bg-gray-50 text-gray-600;
+  }
+}
+
+@keyframes slideUp { from { transform: translateY(18px); opacity:.0 } to { transform: translateY(0); opacity:1 } }
+@keyframes fadeIn { from { opacity:.0 } to { opacity:1 } }
+}
 }

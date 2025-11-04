@@ -1,119 +1,196 @@
-import { useEffect, useState } from "react"
+import React, { useEffect, useMemo, useState } from "react";
 
-type ExtractResult = {
-  name?: string
-  manufacturer?: string
-  model?: string
-  category?: string
-  specs?: Record<string, string>
-  manualUrl?: string
-  condition?: "new" | "used"
-  purchaseDate?: string
-  lifespanMonths?: number
-  confidence?: number
-}
+type Tool = {
+  id: string;
+  name: string;
+  category: string;
+  manufacturer?: string;
+  model?: string;
+  condition?: "new" | "used" | string;
+  purchaseDate?: string;
+  lifespanMonths?: number;
+  available?: boolean;
+  loanStatus?: string;
+  damaged?: boolean;
+  repaired?: boolean;
+  imageUrl?: string;
+  notes?: string;
+};
+
+const fileOnly = (p?: string) => (p ? p.replace(/^.*[\\/]/, "") : "");
+const imgSrc = (p?: string) => (p ? `/tools/${fileOnly(p)}` : "");
 
 export default function App() {
-  const [apiBase] = useState<string>(import.meta.env.VITE_API_BASE)
-  const [file, setFile] = useState<File | null>(null)
-  const [preview, setPreview] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<ExtractResult | null>(null)
+  const [tools, setTools] = useState<Tool[]>([]);
+  const [q, setQ] = useState("");
+  const [cat, setCat] = useState("전체");
+  const [sel, setSel] = useState<Tool | null>(null);
 
   useEffect(() => {
-    // 연결 체크 (콘솔에 ok가 찍히면 web↔api 통신 OK)
-    fetch(apiBase + "/health")
-      .then(r => r.text())
-      .then(t => console.log("health:", t))
-      .catch(e => console.error(e))
-  }, [apiBase])
+    (async () => {
+      const r = await fetch("/api/tools");
+      const data: Tool[] = await r.json();
+      setTools(data);
+    })();
+  }, []);
 
-  const onPick: React.ChangeEventHandler<HTMLInputElement> = e => {
-    const f = e.target.files?.[0] || null
-    setFile(f)
-    setResult(null)
-    setError(null)
-    if (f) setPreview(URL.createObjectURL(f))
-    else setPreview(null)
-  }
+  const cats = useMemo(() => ["전체", ...Array.from(new Set(tools.map(t => t.category || "기타공구")))], [tools]);
+  const filtered = useMemo(() => {
+    const kw = q.trim().toLowerCase();
+    return tools.filter(t => {
+      const okCat = cat === "전체" || t.category === cat;
+      const hay = `${t.name} ${t.category} ${t.manufacturer ?? ""} ${t.model ?? ""}`.toLowerCase();
+      return okCat && (!kw || hay.includes(kw));
+    });
+  }, [tools, q, cat]);
 
-  const onSubmit: React.FormEventHandler = async e => {
-    e.preventDefault()
-    if (!file) return
-    setLoading(true)
-    setError(null)
-    setResult(null)
-    try {
-      const fd = new FormData()
-      fd.append("image", file)
-      const res = await fetch(apiBase + "/api/tools/extract", {
-        method: "POST",
-        body: fd,
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const json = await res.json()
-      setResult(json)
-    } catch (err: any) {
-      setError(err?.message || String(err))
-    } finally {
-      setLoading(false)
-    }
-  }
+  // ESC로 바텀시트 닫기
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setSel(null);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
-    <div style={{ maxWidth: 640, margin: "32px auto", padding: 16, fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif" }}>
-      <h1 style={{ marginBottom: 12 }}>공구반장 — 이미지 인식 테스트</h1>
-
-      <form onSubmit={onSubmit} style={{ display: "grid", gap: 12 }}>
-        <input
-          type="file"
-          accept="image/*"
-          // 모바일 카메라 바로 사용하려면 다음 속성도 유용 (지원 브라우저에서만)
-          capture="environment"
-          onChange={onPick}
-        />
-        {preview && (
-          <img
-            src={preview}
-            alt="preview"
-            style={{ width: "100%", borderRadius: 12, boxShadow: "0 6px 16px rgba(0,0,0,.12)" }}
-          />
-        )}
-        <button
-          type="submit"
-          disabled={!file || loading}
-          style={{
-            padding: "12px 16px",
-            borderRadius: 12,
-            background: loading ? "#999" : "#FF3040",
-            color: "white",
-            border: "none",
-            fontWeight: 700,
-            cursor: loading ? "default" : "pointer",
-            boxShadow: "0 8px 20px rgba(255,48,64,.35)"
-          }}
-        >
-          {loading ? "추출 중..." : "AI로 정보 추출"}
-        </button>
-      </form>
-
-      {error && (
-        <p style={{ marginTop: 12, color: "#c00", fontWeight: 600 }}>
-          에러: {error}
-        </p>
-      )}
-
-      {result && (
-        <div style={{ marginTop: 16, padding: 16, borderRadius: 12, background: "#fff", boxShadow: "0 6px 16px rgba(0,0,0,.08)" }}>
-          <h2 style={{ marginTop: 0 }}>추출 결과</h2>
-          <pre style={{ whiteSpace: "pre-wrap" }}>{JSON.stringify(result, null, 2)}</pre>
+    <div className="min-h-screen bg-white">
+      {/* 상단바 */}
+      <header className="sticky top-0 z-20 bg-white/90 backdrop-blur border-b">
+        <div className="mx-auto max-w-screen-sm px-3 py-3 flex items-center gap-2">
+          <div className="text-[22px] font-black tracking-tight mr-auto">
+            <span className="text-[26px]">🧰</span> 공구반장 — 공구 목록
+            <span className="ml-1 text-rose-600">({filtered.length})</span>
+          </div>
+          <select className="pill" value={cat} onChange={(e)=>setCat(e.target.value)}>
+            {cats.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
         </div>
-      )}
+        <div className="mx-auto max-w-screen-sm px-3 pb-3">
+          <input
+            className="w-full rounded-2xl border px-3 py-2 text-[14px] bg-white"
+            placeholder="이름/제조사/모델 검색"
+            value={q}
+            onChange={(e)=>setQ(e.target.value)}
+          />
+        </div>
+      </header>
 
-      <p style={{ marginTop: 24, opacity: .7 }}>
-        ※ 실제 앱에서는 이 결과를 “저장(POST /api/tools)”해 목록/상세에서 활용합니다.
-      </p>
+      {/* 목록 (모바일 컴팩트) */}
+      <main className="mx-auto max-w-screen-sm px-2 pb-24 space-y-2">
+        {filtered.map(t => (
+          <article key={t.id} className="tool-card">
+            {/* 썸네일 (좌측) */}
+            <div className="thumb">
+              {t.imageUrl
+                ? <img src={imgSrc(t.imageUrl)} alt={t.name} className="max-h-full max-w-full object-contain" loading="lazy" />
+                : <span className="text-gray-400 text-xs">이미지 없음</span>}
+            </div>
+
+            {/* 정보 (우측) */}
+            <div className="flex-1">
+              <div className="flex items-start gap-2">
+                <h2 className="font-bold text-[15px] leading-tight line-clamp-2">{t.name}</h2>
+                <span className="pill ml-auto">{t.category}</span>
+              </div>
+              <div className="mt-1 grid grid-cols-2 gap-y-0.5 text-[12px] text-gray-700">
+                <Info label="상태" value={t.condition === "new" ? "신품" : "중고"} />
+                <Info label="제조사" value={t.manufacturer ?? "-"} />
+                <Info label="모델" value={t.model ?? "-"} />
+                <Info label="구입일" value={t.purchaseDate ?? "-"} />
+              </div>
+
+              {/* 하단 액션 */}
+              <div className="mt-2 flex justify-end">
+                <button className="btn-red-outline text-[13px]" onClick={()=>setSel(t)}>
+  🔍 자세히 보기
+</button>
+              </div>
+            </div>
+          </article>
+        ))}
+
+        {filtered.length === 0 && (
+          <div className="text-center text-gray-500 py-16">검색/필터 조건에 맞는 항목이 없습니다.</div>
+        )}
+      </main>
+
+      {/* 바텀시트 상세 */}
+{sel && (
+  <>
+    <div className="sheet-backdrop" onClick={() => setSel(null)} />
+    <section className="sheet" role="dialog" aria-modal="true" aria-label={`${sel.name} 상세`}>
+      {/* Header */}
+      <div className="sheet-header relative">
+        <div className="sheet-handle" />
+        <button
+          className="sheet-close"
+          onClick={() => setSel(null)}
+          aria-label="닫기"
+        >
+          ✕
+        </button>
+
+        {/* 큰 이미지 */}
+        <div className="w-full h-52 sm:h-64 bg-gray-50 rounded-2xl overflow-hidden flex items-center justify-center">
+          {sel.imageUrl ? (
+            <img
+              src={imgSrc(sel.imageUrl)}
+              alt={sel.name}
+              className="object-contain max-h-full w-auto"
+            />
+          ) : (
+            <span className="text-gray-400 text-sm">이미지 없음</span>
+          )}
+        </div>
+
+        {/* 이름 / 카테고리 */}
+        <div className="mt-3 px-2">
+          <h3 className="text-lg font-bold leading-tight">{sel.name}</h3>
+          <div className="mt-1 flex gap-2 items-center flex-wrap">
+            <span className="pill">{sel.category}</span>
+            <span className="pill">{sel.condition === "new" ? "신품" : "중고"}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="sheet-body">
+        <div className="grid grid-cols-2 gap-y-1 text-[13px]">
+          <Info label="제조사" value={sel.manufacturer ?? "-"} />
+          <Info label="모델" value={sel.model ?? "-"} />
+          <Info label="구입일" value={sel.purchaseDate ?? "-"} />
+          <Info label="수명(개월)" value={sel.lifespanMonths ? String(sel.lifespanMonths) : "-"} />
+          <Info label="대출상태" value={sel.loanStatus ?? "반납"} />
+          <Info label="대출 가능" value={sel.available ? "가능" : "불가"} />
+          <Info label="파손" value={sel.damaged ? "예" : "아니오"} />
+          <Info label="수리" value={sel.repaired ? "예" : "아니오"} />
+        </div>
+
+        {sel.notes && (
+          <div className="mt-3 text-[13px]">
+            <div className="font-semibold mb-1">비고</div>
+            <div className="whitespace-pre-wrap text-gray-700">{sel.notes}</div>
+          </div>
+        )}
+      </div>
+
+      {/* Footer (고정) */}
+      <div className="sheet-footer">
+        <button className="btn-red w-full text-[16px] py-3">
+          📤 이 공구 대출하기
+        </button>
+      </div>
+    </section>
+  </>
+)}
     </div>
-  )
+  );
+}
+
+/* helpers */
+function Info({ label, value }: { label: string; value?: string }) {
+  return (
+    <div className="text-gray-700">
+      <span className="text-gray-500">{label}:</span> {value ?? "-"}
+    </div>
+  );
 }
