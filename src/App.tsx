@@ -29,22 +29,12 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        console.log("API 호출 시작: /api/tools");
         const r = await fetch("/api/tools");
-        console.log("API 응답 상태:", r.status, r.statusText);
-        
-        if (!r.ok) {
-          throw new Error(`API 오류: ${r.status} ${r.statusText}`);
-        }
-        
         const data: Tool[] = await r.json();
-        console.log("API 데이터 받음:", data.length, "개");
         setTools(data);
       } catch (error) {
         console.error("API 호출 실패:", error);
-        console.log("더미 데이터로 대체");
-        
-        // fallback: 더 많은 더미 데이터 사용
+        // fallback: 더미 데이터 사용
         const dummyTools: Tool[] = [
           {
             id: "G001",
@@ -77,102 +67,6 @@ export default function App() {
             repaired: false,
             imageUrl: "circularsaw.jpg",
             notes: "날 교체 필요시 연락"
-          },
-          {
-            id: "G003",
-            name: "해머",
-            category: "수공구",
-            manufacturer: "Stanley",
-            model: "STHT51512",
-            condition: "used",
-            purchaseDate: "2022-08-20",
-            lifespanMonths: 60,
-            available: false,
-            loanStatus: "대출중",
-            damaged: false,
-            repaired: false,
-            imageUrl: "hammer.jpg",
-            notes: "무게 450g"
-          },
-          {
-            id: "G004",
-            name: "각도절단기",
-            category: "전동공구",
-            manufacturer: "BOSCH",
-            model: "GWS 7-115",
-            condition: "used",
-            purchaseDate: "2023-02-20",
-            lifespanMonths: 36,
-            available: true,
-            loanStatus: "반납",
-            damaged: false,
-            repaired: false,
-            imageUrl: "anglegrinder.jpg",
-            notes: "보안경 착용 필수"
-          },
-          {
-            id: "G005",
-            name: "줄자",
-            category: "측정공구",
-            manufacturer: "Stanley",
-            model: "STHT30825",
-            condition: "new",
-            purchaseDate: "2023-04-05",
-            lifespanMonths: 24,
-            available: true,
-            loanStatus: "반납",
-            damaged: false,
-            repaired: false,
-            imageUrl: "tape-measure.jpg",
-            notes: "5m 길이"
-          },
-          {
-            id: "G006",
-            name: "전동 임팩트",
-            category: "전동공구",
-            manufacturer: "Milwaukee",
-            model: "M18 FUEL",
-            condition: "used",
-            purchaseDate: "2023-06-10",
-            lifespanMonths: 36,
-            available: true,
-            loanStatus: "반납",
-            damaged: false,
-            repaired: false,
-            imageUrl: "impact-driver.jpg",
-            notes: "토크 조절 가능"
-          },
-          {
-            id: "G007",
-            name: "레벨기",
-            category: "측정공구",
-            manufacturer: "Stabila",
-            model: "70-2",
-            condition: "new",
-            purchaseDate: "2023-05-15",
-            lifespanMonths: 60,
-            available: true,
-            loanStatus: "반납",
-            damaged: false,
-            repaired: false,
-            imageUrl: "level.jpg",
-            notes: "60cm 길이"
-          },
-          {
-            id: "G008",
-            name: "사포기",
-            category: "전동공구",
-            manufacturer: "Bosch",
-            model: "GEX 125-1 AE",
-            condition: "used",
-            purchaseDate: "2022-11-20",
-            lifespanMonths: 48,
-            available: false,
-            loanStatus: "대출중",
-            damaged: false,
-            repaired: false,
-            imageUrl: "orbital-sander.jpg",
-            notes: "먼지 수집 기능"
           }
         ];
         setTools(dummyTools);
