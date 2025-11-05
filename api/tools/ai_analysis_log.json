@@ -1,0 +1,36 @@
+[
+  {
+    "timestamp": "2025-11-05T19:12:38.786Z",
+    "tempImageName": "temp_1762369952254_3updcfk02.jpg",
+    "fileSize": 32973,
+    "mimeType": "image/jpeg",
+    "analysisResult": {
+      "name": "Cordless Hammer Drill/Driver (XRP Series)",
+      "manufacturer": "DEWALT",
+      "model": null,
+      "category": "Drill/Driver",
+      "condition": "new",
+      "confidence": 0.95,
+      "tempImageId": "temp_1762369952254_3updcfk02",
+      "tempImageName": "temp_1762369952254_3updcfk02.jpg"
+    },
+    "success": true
+  },
+  {
+    "timestamp": "2025-11-05T19:13:36.877Z",
+    "tempImageName": "temp_1762370010508_2hbn9pvpb.jpg",
+    "fileSize": 75087,
+    "mimeType": "image/jpeg",
+    "analysisResult": {
+      "name": "Plunge Saw",
+      "manufacturer": "BOSCH",
+      "model": null,
+      "category": "Circular Saw",
+      "condition": "new",
+      "confidence": 0.95,
+      "tempImageId": "temp_1762370010508_2hbn9pvpb",
+      "tempImageName": "temp_1762370010508_2hbn9pvpb.jpg"
+    },
+    "success": true
+  }
+]

@@ -845,5 +845,26 @@
     ],
     "hiddenKeys": [],
     "createdAt": "2025-11-05T16:33:16.694Z"
+  },
+  "t_1762368809223": {
+    "id": "t_1762368809223",
+    "name": "새 공구 (정보 입력 필요)",
+    "manufacturer": "제조사 미확인",
+    "model": "모델 미확인",
+    "category": "전동공구",
+    "condition": "used",
+    "confidence": 0,
+    "error": "AI 분석을 사용할 수 없습니다. 정보를 직접 입력해주세요.",
+    "available": true,
+    "loanStatus": "반납",
+    "damaged": false,
+    "repaired": false,
+    "imageUrl": "tool_t_1762368809223.jpg",
+    "requiredKeys": [
+      "name",
+      "condition"
+    ],
+    "hiddenKeys": [],
+    "createdAt": "2025-11-05T18:53:29.225Z"
   }
 }

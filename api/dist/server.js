@@ -224,7 +224,7 @@ app.post("/api/tools/extract", upload.single("image"), async (req, res) => {
         fs_1.default.unlinkSync(req.file.path);
         // AI 모델 설정 (안정적인 비전 모델)
         const model = genAI.getGenerativeModel({
-            model: "gemini-1.5-flash", // 기본 flash 모델 (가장 안정적)
+            model: "gemini-flash-latest", // 최신 flash 모델 (2024년 11월 기준)
             generationConfig: {
                 maxOutputTokens: 2048,
                 temperature: 0.1, // 일관성 있는 결과를 위해 낮은 온도
@@ -250,9 +250,15 @@ app.post("/api/tools/extract", upload.single("image"), async (req, res) => {
 - confidence는 0~1 사이 숫자
 - JSON 형태로만 응답하세요`;
         console.log(`🤖 Starting AI analysis for: ${tempImageName}`);
+        console.log(`📁 File info: ${req.file.size} bytes, ${req.file.mimetype}`);
         // AI 분석 시도
         let json;
         try {
+            console.log(`🔍 Google AI API 호출 시작...`);
+            console.log(`🔑 API Key length: ${process.env.GOOGLE_AI_API_KEY?.length}`);
+            console.log(`📊 Model: gemini-flash-latest`);
+            console.log(`📁 Image data length: ${b64.length} chars`);
+            console.log(`🎯 Prompt length: ${prompt.length} chars`);
             const result = await Promise.race([
                 model.generateContent([
                     { text: prompt },
@@ -260,22 +266,29 @@ app.post("/api/tools/extract", upload.single("image"), async (req, res) => {
                 ]),
                 new Promise((_, reject) => setTimeout(() => reject(new Error("AI 분석 시간 초과 (30초)")), 30000))
             ]);
+            console.log(`✅ Google AI API 응답 받음`);
+            console.log(`📦 Result object keys:`, Object.keys(result || {}));
             const response = result.response;
             if (!response) {
+                console.error(`❌ result.response가 없음. result:`, result);
                 throw new Error("AI 응답을 받지 못했습니다");
             }
+            console.log(`📋 Response object keys:`, Object.keys(response || {}));
             let text = response.text();
             if (!text || text.trim() === "") {
+                console.error(`❌ response.text()가 비어있음. response:`, response);
                 throw new Error("AI가 빈 응답을 반환했습니다");
             }
-            console.log(`🤖 AI Raw Response: ${text.substring(0, 100)}...`);
+            console.log(`🤖 AI Raw Response (${text.length} chars):`, text);
             // JSON 추출 (마크다운 코드 블록 제거)
             text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
             try {
                 json = JSON.parse(text);
+                console.log(`✅ AI 분석 성공:`, json);
             }
             catch (parseError) {
-                console.error("JSON 파싱 실패:", text);
+                console.error("❌ JSON 파싱 실패:", text);
+                console.error("파싱 에러:", parseError);
                 // fallback: 기본 정보로 응답
                 json = {
                     name: "분석 실패 - 수동 입력 필요",
@@ -288,7 +301,13 @@ app.post("/api/tools/extract", upload.single("image"), async (req, res) => {
             }
         }
         catch (aiError) {
-            console.error("AI 분석 실패:", aiError);
+            console.error("❌❌❌ AI 분석 완전 실패 ❌❌❌");
+            console.error("Error name:", aiError?.name);
+            console.error("Error message:", aiError?.message);
+            console.error("Error stack:", aiError?.stack);
+            console.error("Error code:", aiError?.code);
+            console.error("Error status:", aiError?.status);
+            console.error("Full error object:", aiError);
             // AI 완전 실패시 기본 응답 - 사용자가 직접 입력할 수 있도록 유도
             json = {
                 name: "새 공구 (정보 입력 필요)",
@@ -297,7 +316,13 @@ app.post("/api/tools/extract", upload.single("image"), async (req, res) => {
                 category: "전동공구",
                 condition: "used",
                 confidence: 0.0,
-                error: "AI 분석을 사용할 수 없습니다. 정보를 직접 입력해주세요."
+                error: "AI 분석을 사용할 수 없습니다. 정보를 직접 입력해주세요.",
+                errorDetails: {
+                    name: aiError?.name,
+                    message: aiError?.message,
+                    code: aiError?.code,
+                    status: aiError?.status
+                }
             };
         }
         // 기본값 보정
@@ -308,6 +333,33 @@ app.post("/api/tools/extract", upload.single("image"), async (req, res) => {
         // 임시 이미지 정보를 결과에 추가
         json.tempImageId = tempImageId;
         json.tempImageName = tempImageName;
+        // AI 분석 결과를 로그 파일에 저장
+        const logEntry = {
+            timestamp: new Date().toISOString(),
+            tempImageName,
+            fileSize: req.file.size,
+            mimeType: req.file.mimetype,
+            analysisResult: json,
+            success: !json.error
+        };
+        const logFilePath = path_1.default.join(TOOLS_DIR, 'ai_analysis_log.json');
+        try {
+            let logs = [];
+            if (fs_1.default.existsSync(logFilePath)) {
+                const logData = fs_1.default.readFileSync(logFilePath, 'utf8');
+                logs = JSON.parse(logData);
+            }
+            logs.push(logEntry);
+            // 최대 50개 로그만 보관
+            if (logs.length > 50) {
+                logs = logs.slice(-50);
+            }
+            fs_1.default.writeFileSync(logFilePath, JSON.stringify(logs, null, 2));
+            console.log(`📝 AI 분석 로그 저장됨: ${logFilePath}`);
+        }
+        catch (logError) {
+            console.error('⚠️ 로그 저장 실패:', logError);
+        }
         console.log(`✅ AI Analysis completed for: ${json.name} (confidence: ${json.confidence})`);
         return res.json(json);
     }
