@@ -255,16 +255,154 @@ export default function ToolEditor(){
   };
 
   const handleAIAnalysis = async (tool: Tool) => {
+    console.log('🤖 AI 분석 시작:', tool);
+    
     if (!tool.imageUrl && !tool.tempImageName && !tool.tempDataURL) {
       alert('AI 분석을 위해서는 이미지가 필요합니다.');
+      console.log('❌ 이미지 없음');
       return;
     }
     
     try {
-      // AI 재분석 API 호출 (구현 필요)
-      alert('AI 재분석 기능은 개발 중입니다.');
+      // AI 분석 상태 체크
+      console.log('📡 AI 상태 확인 중...');
+      const statusResponse = await fetch('/api/ai/status');
+      const statusData = await statusResponse.json();
+      console.log('📊 AI 상태:', statusData);
+      
+      if (statusData.status !== 'ready') {
+        console.log('❌ AI 서비스 사용 불가:', statusData);
+        alert('AI 분석 서비스를 사용할 수 없습니다.\nGoogle AI API 키가 설정되지 않았습니다.');
+        return;
+      }
+      
+      console.log('✅ AI 서비스 준비됨');
+      
+      const confirmed = confirm(
+        `"${tool.name}" 공구의 이미지를 AI로 재분석하시겠습니까?\n\n` +
+        `기존 정보가 AI 분석 결과로 업데이트될 수 있습니다.`
+      );
+      
+      if (!confirmed) {
+        console.log('🚫 사용자 취소');
+        return;
+      }
+      
+      // 이미지 파일을 서버에 전송하여 AI 분석
+      console.log('🖼️ 이미지 처리 시작...');
+      let imageBlob: Blob;
+      
+      if (tool.tempImageName) {
+        console.log('📁 임시 이미지 사용:', tool.tempImageName);
+        const imageResponse = await fetch(`/temp/${tool.tempImageName}`);
+        imageBlob = await imageResponse.blob();
+      } else if (tool.imageUrl) {
+        console.log('📁 기존 이미지 사용:', tool.imageUrl);
+        const imageResponse = await fetch(`/tools/${tool.imageUrl.replace(/^.*[\\/]/, "")}`);
+        imageBlob = await imageResponse.blob();
+      } else if (tool.tempDataURL) {
+        console.log('📁 DataURL 사용');
+        const response = await fetch(tool.tempDataURL);
+        imageBlob = await response.blob();
+      } else {
+        throw new Error('이미지를 찾을 수 없습니다.');
+      }
+      
+      console.log('📦 이미지 Blob 생성:', {
+        size: imageBlob.size,
+        type: imageBlob.type
+      });
+      
+      // FormData로 이미지 전송
+      const formData = new FormData();
+      formData.append('image', imageBlob, `reanalysis_${tool.id}.jpg`);
+      
+      console.log('📤 서버로 AI 분석 요청 전송...');
+      
+      const analysisResponse = await fetch('/api/tools/extract', {
+        method: 'POST',
+        body: formData
+      });
+      
+      console.log('📥 서버 응답 상태:', analysisResponse.status, analysisResponse.statusText);
+      
+      if (!analysisResponse.ok) {
+        const errorText = await analysisResponse.text();
+        console.error('❌ 서버 에러 응답:', errorText);
+        throw new Error(`AI 분석 요청 실패 (${analysisResponse.status}): ${errorText}`);
+      }
+      
+      const analysisResult = await analysisResponse.json();
+      console.log('📋 서버에서 받은 원본 응답:', analysisResult);      // AI 분석 결과를 콘솔과 로컬스토리지에 저장
+      console.log('🤖 AI 분석 결과:', analysisResult);
+      
+      // 분석 결과를 로컬스토리지에 저장 (디버깅용)
+      const analysisLog = {
+        timestamp: new Date().toISOString(),
+        toolId: tool.id,
+        toolName: tool.name,
+        request: {
+          hasImage: !!imageBlob,
+          imageSize: imageBlob.size,
+          imageType: imageBlob.type
+        },
+        response: analysisResult
+      };
+      
+      // 기존 로그 가져오기
+      const existingLogs = JSON.parse(localStorage.getItem('ai-analysis-logs') || '[]');
+      existingLogs.push(analysisLog);
+      
+      // 최대 10개까지만 보관
+      if (existingLogs.length > 10) {
+        existingLogs.shift();
+      }
+      
+      localStorage.setItem('ai-analysis-logs', JSON.stringify(existingLogs, null, 2));
+      
+      // error 필드가 있거나 기본 fallback 메시지인 경우 에러로 처리
+      if (analysisResult.error || analysisResult.name === '새 공구 (정보 입력 필요)') {
+        console.error('❌ AI 분석 에러 또는 실패:', analysisResult);
+        const errorMsg = analysisResult.error || analysisResult.message || 
+                        'Google AI API가 이미지를 인식하지 못했습니다.\n\n가능한 원인:\n- API 키가 유효하지 않음\n- 할당량 초과\n- 이미지가 너무 크거나 형식이 지원되지 않음\n\n브라우저 콘솔에서 자세한 로그를 확인하세요.';
+        throw new Error(errorMsg);
+      }
+      
+      // AI 분석 결과를 editData에 적용
+      const updatedData = {
+        ...tool,
+        name: analysisResult.name || tool.name,
+        manufacturer: analysisResult.manufacturer || tool.manufacturer,
+        model: analysisResult.model || tool.model,
+        category: analysisResult.category || tool.category,
+        condition: analysisResult.condition || tool.condition,
+        notes: analysisResult.notes || tool.notes
+      };
+      
+      setEditData(updatedData);
+      setEditMode(true);
+      setSel(updatedData);
+      
+      alert(
+        `AI 분석이 완료되었습니다!\n\n` +
+        `분석된 정보:\n` +
+        `- 이름: ${analysisResult.name || '없음'}\n` +
+        `- 제조사: ${analysisResult.manufacturer || '없음'}\n` +
+        `- 모델: ${analysisResult.model || '없음'}\n` +
+        `- 카테고리: ${analysisResult.category || '없음'}\n\n` +
+        `수정 모드로 전환되었습니다. 정보를 확인 후 저장하세요.`
+      );
+      
     } catch (error) {
-      alert('AI 분석에 실패했습니다.');
+      console.error('❌ AI 분석 실패 (상세):', error);
+      console.error('❌ 에러 스택:', (error as Error).stack);
+      
+      let errorMessage = 'AI 분석에 실패했습니다';
+      if (error instanceof Error) {
+        errorMessage += ': ' + error.message;
+      }
+      
+      alert(errorMessage + '\n\n브라우저 콘솔(F12)에서 상세 정보를 확인하세요.');
     }
   };
 
