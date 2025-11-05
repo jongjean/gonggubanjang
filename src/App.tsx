@@ -27,15 +27,9 @@ export default function App() {
   const [sel, setSel] = useState<Tool | null>(null);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const r = await fetch("/api/tools");
-        const data: Tool[] = await r.json();
-        setTools(data);
-      } catch (error) {
-        console.error("API 호출 실패:", error);
-        // fallback: 다양한 카테고리의 더미 데이터 사용
-        const dummyTools: Tool[] = [
+    // API 서버 없이 바로 더미 데이터 사용
+    console.log("더미 데이터 로딩...");
+    const dummyTools: Tool[] = [
           {
             id: "G001",
             name: "드릴 드라이버",
@@ -230,8 +224,7 @@ export default function App() {
           }
         ];
         setTools(dummyTools);
-      }
-    })();
+        console.log("더미 데이터 로딩 완료:", dummyTools.length, "개");
   }, []);
 
   const cats = useMemo(() => ["전체", ...Array.from(new Set(tools.map(t => t.category || "기타공구")))], [tools]);
