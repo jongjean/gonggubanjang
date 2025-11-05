@@ -1,0 +1,449 @@
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+
+type Tool = {
+  id:string; name:string; category:string;
+  manufacturer?:string; model?:string; condition?: "new"|"used"|string;
+  purchaseDate?:string; lifespanMonths?:number; available?:boolean;
+  loanStatus?:string; damaged?:boolean; repaired?:boolean;
+  imageUrl?:string; notes?:string; status?:string;
+  tempImageId?:string; tempImageName?:string; tempDataURL?:string; // 임시 이미지 정보
+};
+
+const fileOnly = (p?:string)=> p? p.replace(/^.*[\\/]/,"") : "";
+const imgSrc = (p?:string, tempImageName?:string, tempDataURL?:string)=> {
+  if (tempDataURL) {
+    // DataURL이 있으면 우선 사용 (가장 안정적)
+    return tempDataURL;
+  }
+  if (tempImageName) {
+    // 임시 이미지인 경우
+    return `/temp/${tempImageName}`;
+  }
+  return p? `/tools/${fileOnly(p)}` : "";
+};
+
+export default function ToolEditor(){
+  const [tools,setTools] = useState<Tool[]>([]);
+  const [q,setQ] = useState(""); 
+  const [cat,setCat]=useState("전체");
+  const [sel,setSel] = useState<Tool|null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [editData, setEditData] = useState<Tool|null>(null);
+
+  useEffect(()=>{ (async()=>{
+    const data:Tool[] = await fetch("/api/tools").then(r=>r.json());
+    setTools(data);
+  })() },[]);
+
+  // URL 파라미터 처리를 위한 별도 useEffect
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const editId = urlParams.get('edit');
+    const isTemp = urlParams.get('temp');
+    
+    if (isTemp === 'true') {
+      // 임시 데이터에서 편집 시작
+      const tempDataStr = localStorage.getItem('temp-edit-data');
+      if (tempDataStr) {
+        try {
+          const tempData = JSON.parse(tempDataStr);
+          console.log('📄 Temp data loaded:', tempData);
+          console.log('🖼️ Temp image info:', {
+            tempImageId: tempData.tempImageId,
+            tempImageName: tempData.tempImageName,
+            imageUrl: tempData.imageUrl
+          });
+          
+          setEditData(tempData);
+          setEditMode(true);
+          setSel(tempData);
+          // localStorage에서 임시 데이터 제거
+          localStorage.removeItem('temp-edit-data');
+        } catch (e) {
+          console.error('임시 데이터 파싱 실패:', e);
+        }
+      }
+      // URL에서 temp 파라미터 제거
+      window.history.replaceState({}, '', '/tool-editor');
+    } else if (editId && tools.length > 0) {
+      // 기존 도구 편집
+      const toolToEdit = tools.find(t => t.id === editId);
+      if (toolToEdit) {
+        setEditData({...toolToEdit});
+        setEditMode(true);
+        setSel(toolToEdit);
+        // URL에서 edit 파라미터 제거
+        window.history.replaceState({}, '', '/tool-editor');
+      }
+    }
+  }, [tools]);
+
+  const cats = useMemo(()=>["전체",...Array.from(new Set(tools.map(t=>t.category||"기타")))], [tools]);
+  
+  const filtered = useMemo(()=>{
+    const kw=q.trim().toLowerCase();
+    return tools.filter(t=>{
+      const okCat = cat==="전체" || t.category===cat;
+      const hay = `${t.name} ${t.category} ${t.manufacturer??""} ${t.model??""}`.toLowerCase();
+      return okCat && (!kw || hay.includes(kw));
+    });
+  },[tools,q,cat]);
+
+  const handleEdit = (tool: Tool) => {
+    setEditData({...tool});
+    setEditMode(true);
+    setSel(tool);
+  };
+
+  const handleSave = async () => {
+    if (!editData) return;
+    
+    try {
+      // 임시 데이터인지 확인 (ID가 temp_로 시작하거나 기존 도구 목록에 없는 경우)
+      const isNewTool = !editData.id || editData.id.startsWith('temp_') || !tools.find(t => t.id === editData.id);
+      
+      if (isNewTool) {
+        // 새 도구 생성
+        const response = await fetch('/api/tools', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(editData)
+        });
+        
+        if (response.ok) {
+          const createdTool = await response.json();
+          setTools(prev => [...prev, createdTool]);
+          setEditMode(false);
+          setEditData(null);
+          setSel(createdTool);
+          alert('새 공구가 등록되었습니다.');
+        }
+      } else {
+        // 기존 도구 업데이트
+        const response = await fetch(`/api/tools/${editData.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(editData)
+        });
+        
+        if (response.ok) {
+          const updatedTool = await response.json();
+          setTools(prev => prev.map(t => t.id === editData.id ? updatedTool : t));
+          setEditMode(false);
+          setEditData(null);
+          setSel(updatedTool);
+          alert('공구 정보가 업데이트되었습니다.');
+        }
+      }
+    } catch (error) {
+      alert('저장에 실패했습니다.');
+    }
+  };
+
+  const handleDelete = async (tool: Tool) => {
+    const confirmed = confirm(
+      `"${tool.name}" 공구를 정말로 삭제하시겠습니까?\n\n` +
+      `이 작업은 되돌릴 수 없으며, 삭제 이력은 히스토리에 기록됩니다.`
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+      // 1. 삭제 이력을 incidents에 기록
+      const incidentResponse = await fetch('/api/incidents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          toolId: tool.id,
+          type: 'disposed',
+          timestamp: new Date().toISOString(),
+          description: `공구 삭제: ${tool.name} (${tool.manufacturer || '제조사 미상'} ${tool.model || ''})`
+        })
+      });
+      
+      if (!incidentResponse.ok) {
+        throw new Error('이력 기록 실패');
+      }
+      
+      // 2. 실제 공구 데이터 삭제
+      const deleteResponse = await fetch(`/api/tools/${tool.id}`, {
+        method: 'DELETE'
+      });
+      
+      if (!deleteResponse.ok) {
+        throw new Error('삭제 실패');
+      }
+      
+      // 3. 로컬 상태 업데이트
+      setTools(prevTools => prevTools.filter(t => t.id !== tool.id));
+      setSel(null);
+      setEditMode(false);
+      setEditData(null);
+      
+      alert(`"${tool.name}" 공구가 삭제되었습니다.\n삭제 이력이 히스토리에 기록되었습니다.`);
+    } catch (error) {
+      console.error('삭제 실패:', error);
+      alert('삭제에 실패했습니다: ' + (error as Error).message);
+    }
+  };
+
+  const handleAIAnalysis = async (tool: Tool) => {
+    if (!tool.imageUrl && !tool.tempImageName && !tool.tempDataURL) {
+      alert('AI 분석을 위해서는 이미지가 필요합니다.');
+      return;
+    }
+    
+    try {
+      // AI 재분석 API 호출 (구현 필요)
+      alert('AI 재분석 기능은 개발 중입니다.');
+    } catch (error) {
+      alert('AI 분석에 실패했습니다.');
+    }
+  };
+
+  useEffect(()=>{
+    const onKey=(e:KeyboardEvent)=> {
+      if (e.key==="Escape") {
+        if (editMode) {
+          setEditMode(false);
+          setEditData(null);
+        } else {
+          setSel(null);
+        }
+      }
+    };
+    window.addEventListener("keydown",onKey); 
+    return ()=>window.removeEventListener("keydown",onKey);
+  },[editMode]);
+
+  return (
+    <div className="min-h-screen app-bg">
+      {/* 헤더 */}
+      <header className="sticky top-0 z-20 border-b border-[var(--line)] bg-black/30 backdrop-blur">
+        <div className="max-w-screen-sm mx-auto px-3 py-3 flex items-center gap-2">
+          <Link to="/" className="btn-ghost text-sm px-3 py-2">
+            🏠 홈
+          </Link>
+          <div className="text-white text-xl font-black tracking-tight ml-2 mr-auto">📝 공구 목록</div>
+          <Link to="/tools" className="btn-red-outline text-sm px-3 py-2">
+            🔍 둘러보기
+          </Link>
+        </div>
+        
+        {/* 필터 */}
+        <div className="max-w-screen-sm mx-auto px-3 pb-3 space-y-2">
+          <select className="pill w-full" value={cat} onChange={e=>setCat(e.target.value)}>
+            {cats.map(c=><option key={c} value={c}>{c}</option>)}
+          </select>
+          <input
+            className="w-full rounded-2xl px-3 py-2 bg-[var(--panel)] border border-[var(--line)] text-white placeholder:muted"
+            placeholder="이름/제조사/모델 검색"
+            value={q} onChange={e=>setQ(e.target.value)}
+          />
+        </div>
+      </header>
+
+      {/* 리스트 */}
+      <main className="max-w-screen-sm mx-auto px-2 pb-28 space-y-2">
+        <div className="text-center py-2">
+          <span className="text-blue-400 text-sm font-semibold">정보 수정 가능 - 총 {filtered.length}개 공구</span>
+        </div>
+        
+        {filtered.map(t=>(
+          <article key={t.id} className="tool-card">
+            <div className="thumb">
+              {(t.imageUrl || t.tempImageName || t.tempDataURL)
+                ? <img src={imgSrc(t.imageUrl, t.tempImageName, t.tempDataURL)} alt={t.name} className="max-h-full max-w-full object-contain" loading="lazy"/>
+                : <span className="muted text-xs">이미지 없음</span>}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start gap-2">
+                <h2 className="text-white font-bold text-[15px] leading-tight line-clamp-2">{t.name}</h2>
+                <span className="pill ml-auto">{t.category}</span>
+              </div>
+              
+              <div className="mt-1 flex items-center gap-2">
+                <span className="text-xs text-white/60">#{t.id}</span>
+                <span className="text-xs text-blue-400">수정 가능</span>
+              </div>
+              
+              <div className="meta-row mt-1">
+                <Meta label="상태" val={t.condition==="new"?"신품":"중고"} />
+                <Meta label="제조사" val={t.manufacturer??"-"} />
+                <Meta label="모델" val={t.model??"-"} />
+              </div>
+              <div className="mt-2 flex justify-between gap-2">
+                <button className="btn-ghost text-sm" onClick={()=>setSel(t)}>🔍 보기</button>
+                <button className="btn-blue text-sm" onClick={()=>handleEdit(t)}>✏️ 수정</button>
+                <button className="btn-purple text-sm" onClick={()=>handleAIAnalysis(t)}>🤖 AI분석</button>
+              </div>
+            </div>
+          </article>
+        ))}
+        {filtered.length===0 && <div className="text-center muted py-16">검색/필터 조건에 맞는 항목이 없습니다.</div>}
+      </main>
+
+      {/* 바텀시트 (상세보기/수정) */}
+      {sel && (
+        <>
+          <div className="sheet-backdrop" onClick={()=>{setSel(null); setEditMode(false); setEditData(null);}} />
+          <section className="sheet" role="dialog" aria-modal="true" aria-label={`${sel.name} ${editMode ? '수정' : '상세'}`}>
+            <div className="sheet-header">
+              <div className="sheet-handle" />
+              <button className="sheet-close" onClick={()=>{setSel(null); setEditMode(false); setEditData(null);}} aria-label="닫기">✕</button>
+
+              <div className="w-full h-56 bg-[#0f1318] rounded-2xl overflow-hidden flex items-center justify-center">
+                {(sel.imageUrl || sel.tempImageName || sel.tempDataURL)
+                  ? <img src={imgSrc(sel.imageUrl, sel.tempImageName, sel.tempDataURL)} alt={sel.name} className="object-contain max-h-full w-auto"/>
+                  : <span className="muted text-sm">이미지 없음</span>}
+              </div>
+
+              <div className="mt-3 px-1">
+                <h3 className="text-[18px] font-extrabold leading-tight">{sel.name}</h3>
+                <div className="mt-1 flex gap-2 items-center flex-wrap">
+                  <span className="pill">{sel.category}</span>
+                  <span className="pill">{sel.condition==="new"?"신품":"중고"}</span>
+                  {editMode && <span className="text-blue-400 text-sm">수정 모드</span>}
+                </div>
+              </div>
+            </div>
+
+            <div className="sheet-body">
+              {editMode && editData ? (
+                /* 수정 폼 */
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">공구명</label>
+                    <input 
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
+                      value={editData.name} 
+                      onChange={(e) => setEditData({...editData, name: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">제조사</label>
+                    <input 
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
+                      value={editData.manufacturer || ''} 
+                      onChange={(e) => setEditData({...editData, manufacturer: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">모델</label>
+                    <input 
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
+                      value={editData.model || ''} 
+                      onChange={(e) => setEditData({...editData, model: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">카테고리</label>
+                    <select 
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
+                      value={editData.category} 
+                      onChange={(e) => setEditData({...editData, category: e.target.value})}
+                    >
+                      <option value="전동공구">전동공구</option>
+                      <option value="수공구">수공구</option>
+                      <option value="측정공구">측정공구</option>
+                      <option value="안전장비">안전장비</option>
+                      <option value="기타">기타</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">상태</label>
+                    <select 
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white"
+                      value={editData.condition} 
+                      onChange={(e) => setEditData({...editData, condition: e.target.value as "new"|"used"})}
+                    >
+                      <option value="new">신품</option>
+                      <option value="used">중고</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">비고</label>
+                    <textarea 
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-white" 
+                      rows={3}
+                      value={editData.notes || ''} 
+                      onChange={(e) => setEditData({...editData, notes: e.target.value})}
+                    />
+                  </div>
+                </div>
+              ) : (
+                /* 상세 정보 */
+                <div className="grid grid-cols-2 gap-y-1 text-[13px]">
+                  <Meta label="공구 ID" val={sel.id} />
+                  <Meta label="제조사" val={sel.manufacturer??"-"} />
+                  <Meta label="모델" val={sel.model??"-"} />
+                  <Meta label="구입일" val={sel.purchaseDate??"-"} />
+                  <Meta label="수명(개월)" val={sel.lifespanMonths?String(sel.lifespanMonths):"-"} />
+                  <Meta label="대출상태" val={sel.loanStatus??"반납"} />
+                  <Meta label="대출 가능" val={sel.available?"가능":"불가"} />
+                  <Meta label="파손" val={sel.damaged?"예":"아니오"} />
+                  <Meta label="수리" val={sel.repaired?"예":"아니오"} />
+                  {sel.notes && (
+                    <>
+                      <div className="col-span-2 mt-2">
+                        <div className="font-semibold mb-1">비고</div>
+                        <div className="whitespace-pre-wrap text-[#dfe5ec]">{sel.notes}</div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="sheet-footer">
+              {editMode ? (
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <button className="btn-ghost flex-1" onClick={()=>{setEditMode(false); setEditData(null);}}>
+                      취소
+                    </button>
+                    <button className="btn-blue flex-1" onClick={handleSave}>
+                      💾 저장
+                    </button>
+                  </div>
+                  <button 
+                    className="btn-red w-full text-sm" 
+                    onClick={()=>editData && handleDelete(editData)}
+                  >
+                    🗑️ 이 공구 삭제
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <button className="btn-blue flex-1" onClick={()=>handleEdit(sel)}>
+                    ✏️ 정보 수정
+                  </button>
+                  <button className="btn-purple flex-1" onClick={()=>handleAIAnalysis(sel)}>
+                    🤖 AI 재분석
+                  </button>
+                </div>
+              )}
+            </div>
+          </section>
+        </>
+      )}
+
+      {/* 하단 탭바 */}
+      <nav className="tabbar">
+        <Link to="/capture" className="tab">📷 촬영</Link>
+        <button 
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="tab tab--primary"
+        >
+          📝 공구목록
+        </button>
+        <Link to="/settings" className="tab">⚙️ 설정</Link>
+      </nav>
+    </div>
+  );
+}
+
+function Meta({label,val}:{label:string; val?:string}){
+  return <div className="text-[#d0d6dd]"><span className="muted">{label}:</span> {val??"-"}</div>;
+}

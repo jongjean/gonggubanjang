@@ -18,6 +18,7 @@
   },
   "homepage": "https://github.com/jongjean/gonggubanjang#readme",
   "devDependencies": {
+    "@types/react-router-dom": "^5.3.3",
     "concurrently": "^9.2.1",
     "nodemon": "^3.1.10",
     "typescript": "^5.9.3"
