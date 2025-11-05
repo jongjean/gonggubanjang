@@ -1,26 +1,40 @@
 {
-  "name": "gonggubanjang",
-  "version": "1.0.0",
-  "description": "> **스마트폰 카메라 한 번으로 공구를 자동 인식하고 관리하는 AI 미니앱**  \r > 일반 가정·학급·소호사무실·동아리 등 **100개 미만의 공구나 장비**를  \r > 효율적으로 관리할 수 있도록 설계된 100% 무료 웹뷰 앱입니다.",
-  "main": "index.js",
+  "name": "web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "vite",
+    "dev-safe": "powershell -Command \"netstat -ano | Select-String ':5000 ' | ForEach-Object { $_.Line.Split(' ')[-1] } | ForEach-Object { if($_ -match '[0-9]+') { taskkill /F /PID $_ 2>$null } }; Start-Sleep 1; vite\"",
+    "build": "tsc -b && vite build",
+    "vercel-build": "tsc -b --noEmit && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/jongjean/gonggubanjang.git"
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@vercel/node": "^3.2.29",
+    "formidable": "^3.5.4",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^7.9.5"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/jongjean/gonggubanjang/issues"
-  },
-  "homepage": "https://github.com/jongjean/gonggubanjang#readme",
   "devDependencies": {
-    "@types/react-router-dom": "^5.3.3",
-    "concurrently": "^9.2.1",
-    "nodemon": "^3.1.10",
-    "typescript": "^5.9.3"
+    "@eslint/js": "^9.36.0",
+    "@types/formidable": "^3.4.6",
+    "@types/node": "^24.6.0",
+    "@types/react": "^19.1.16",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.4",
+    "autoprefixer": "^10.4.21",
+    "eslint": "^9.36.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.22",
+    "globals": "^16.4.0",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.45.0",
+    "vite": "^6.0.0"
   }
 }

@@ -7,6 +7,7 @@
     "dev": "vite",
     "dev-safe": "powershell -Command \"netstat -ano | Select-String ':5000 ' | ForEach-Object { $_.Line.Split(' ')[-1] } | ForEach-Object { if($_ -match '[0-9]+') { taskkill /F /PID $_ 2>$null } }; Start-Sleep 1; vite\"",
     "build": "tsc -b && vite build",
+    "vercel-build": "tsc -b --noEmit && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -17,7 +18,6 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",
-    "@tailwindcss/postcss": "^4.1.16",
     "@types/node": "^24.6.0",
     "@types/react": "^19.1.16",
     "@types/react-dom": "^19.1.9",
@@ -28,12 +28,9 @@
     "eslint-plugin-react-refresh": "^0.4.22",
     "globals": "^16.4.0",
     "postcss": "^8.5.6",
-    "tailwindcss": "^4.1.16",
+    "tailwindcss": "^3.4.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.45.0",
-    "vite": "npm:rolldown-vite@7.1.14"
-  },
-  "overrides": {
-    "vite": "npm:rolldown-vite@7.1.14"
+    "vite": "^6.0.0"
   }
 }
