@@ -1,6 +1,5 @@
 // api/ai-status.ts
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { checkAIStatus } from './src/lib/ai';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS 설정
@@ -14,8 +13,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method === 'GET') {
     try {
-      const status = await checkAIStatus();
-      return res.status(200).json(status);
+      // 간단한 AI 상태 시뮬레이션
+      const hasApiKey = !!process.env.GEMINI_API_KEY;
+      
+      return res.status(200).json({
+        status: hasApiKey ? "연결됨" : "API 키 없음",
+        model: "gemini-1.5-flash-latest",
+        available: hasApiKey,
+        timestamp: new Date().toISOString()
+      });
     } catch (error) {
       console.error('AI 상태 확인 오류:', error);
       return res.status(500).json({
