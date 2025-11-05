@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-type Tool = { id:string; name:string; category:string; available?:boolean; condition?:string; damaged?:boolean; repaired?:boolean; };
-type Loan = { id:string; toolId:string; action:"loan"|"return"; timestamp:string };
+type Tool = { id:string; name:string; category:string; available?:boolean; condition?:string; damaged?:boolean; repaired?:boolean; status?:string; loanStatus?:string; };
+type Loan = { id:string; toolId:string; startDate:string; endDate:string; status:"active"|"returned"; createdAt:string; };
 type Incident = { id:string; toolId:string; type:string; timestamp:string };
 
 export default function Landing() {
@@ -13,22 +13,38 @@ export default function Landing() {
   useEffect(()=>{(async()=>{
     const [t,l,i]=await Promise.all([
       fetch("/api/tools").then(r=>r.json()),
-      fetch("/api/loans").then(r=>r.json()),
+      fetch("/api/my-loans").then(r=>r.json()),
       fetch("/api/incidents").then(r=>r.json()),
     ]);
     setTools(t); setLoans(l); setIncidents(i);
   })()},[]);
 
   const stats = useMemo(()=>{
-    const total=tools.length;
-    const onLoan=Math.max(0, loans.filter(x=>x.action==="loan").length - loans.filter(x=>x.action==="return").length);
-    const damaged=tools.filter(t=>t.damaged).length;
-    const available=tools.filter(t=>t.available!==false).length;
+    const total = tools.length;
+    
+    // 대출현황 = 대출중 상태인 공구
+    const onLoan = tools.filter(t => t.loanStatus === "대출중").length;
+    
+    // 망실 = 폐기 + 파손(수리되지 않은) + 수리중
+    const damaged = tools.filter(t =>
+      t.status === "disposed" || 
+      (t.damaged && !t.repaired) || 
+      t.status === "repairing"
+    ).length;
+    
+    // 대여가능 = 정상 상태 공구 (파손X, 폐기X, 수리중X, 대출중X)
+    const available = tools.filter(t =>
+      t.status !== "disposed" &&           // 폐기 아님
+      t.status !== "repairing" &&          // 수리중 아님  
+      !(t.damaged && !t.repaired) &&      // 파손상태 아님(수리완료는 OK)
+      t.loanStatus !== "대출중"             // 대출중 아님
+    ).length;
+    
     return { total, onLoan, damaged, available };
   },[tools,loans]);
 
   const recent = useMemo(()=>{
-    const lx = loans.map(l=>({k:l.id, label:l.action==="loan"?"대여":"반납", ts:l.timestamp, toolId:l.toolId, tone:l.action==="loan"?"amber":"emerald"}));
+    const lx = loans.map(l=>({k:l.id, label:l.status==="active"?"대여":"반납", ts:l.createdAt, toolId:l.toolId, tone:l.status==="active"?"amber":"emerald"}));
     const ix = incidents.map(i=>{
       const labelMap: Record<string, string> = {
         'new': '신규',
@@ -84,7 +100,7 @@ export default function Landing() {
         {/* KPIs */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Kpi title="총 보유" value={stats.total}/>
-          <Kpi title="공구 사용" value={stats.onLoan} tone="amber"/>
+          <Kpi title="대출 현황" value={stats.onLoan} tone="amber"/>
           <Kpi title="대여 가능" value={stats.available} tone="emerald"/>
           <Kpi title="망실" value={stats.damaged} tone="red"/>
         </div>

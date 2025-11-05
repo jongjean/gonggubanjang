@@ -13,25 +13,28 @@ const fileOnly = (p?:string)=> p? p.replace(/^.*[\\/]/,"") : "";
 const imgSrc = (p?:string)=> p? `/tools/${fileOnly(p)}` : "";
 
 const getStatusColor = (tool: Tool) => {
-  if (tool.status === "disposed" || tool.damaged) return "bg-red-500/15 border-red-500/40 text-red-300";
+  if (tool.status === "disposed") return "bg-red-500/15 border-red-500/40 text-red-300";
+  if (tool.damaged && !tool.repaired) return "bg-red-500/15 border-red-500/40 text-red-300";
+  if (tool.status === "repairing") return "bg-orange-500/15 border-orange-500/40 text-orange-300";
   if (tool.loanStatus === "대출중") return "bg-amber-500/15 border-amber-500/40 text-amber-300";
-  if (tool.repaired) return "bg-blue-500/15 border-blue-500/40 text-blue-300";
+  if (tool.repaired || (tool.damaged && tool.repaired)) return "bg-blue-500/15 border-blue-500/40 text-blue-300";
   return "bg-emerald-500/15 border-emerald-500/40 text-emerald-300";
 };
 
 const getStatusText = (tool: Tool) => {
   if (tool.status === "disposed") return "폐기";
   if (tool.damaged && !tool.repaired) return "파손";
-  if (tool.damaged && tool.repaired) return "수리완료";
+  if (tool.status === "repairing") return "수리중";
   if (tool.loanStatus === "대출중") return "대여중";
+  if (tool.repaired || (tool.damaged && tool.repaired)) return "수리완료";
   return "정상";
 };
 
 export default function Tools(){
   const [tools,setTools] = useState<Tool[]>([]);
   const [q,setQ] = useState(""); 
-  const [cat,setCat]=useState("전체");
-  const [statusFilter, setStatusFilter] = useState("전체");
+  const [cat,setCat]=useState("공구분류(전체)");
+  const [statusFilter, setStatusFilter] = useState("공구현황(전체)");
   const [sel,setSel] = useState<Tool|null>(null);
 
   useEffect(()=>{ (async()=>{
@@ -39,14 +42,14 @@ export default function Tools(){
     setTools(data);
   })() },[]);
 
-  const cats = useMemo(()=>["전체",...Array.from(new Set(tools.map(t=>t.category||"기타")))], [tools]);
-  const statusOptions = ["전체", "정상", "대여중", "파손", "수리완료", "폐기"];
+  const cats = useMemo(()=>["공구분류(전체)",...Array.from(new Set(tools.map(t=>t.category||"기타")))], [tools]);
+  const statusOptions = ["공구현황(전체)", "정상", "대여중", "파손", "수리중", "수리완료", "폐기"];
   
   const filtered = useMemo(()=>{
     const kw=q.trim().toLowerCase();
     return tools.filter(t=>{
-      const okCat = cat==="전체" || t.category===cat;
-      const okStatus = statusFilter==="전체" || getStatusText(t)===statusFilter;
+      const okCat = cat==="공구분류(전체)" || t.category===cat;
+      const okStatus = statusFilter==="공구현황(전체)" || getStatusText(t)===statusFilter;
       const hay = `${t.name} ${t.category} ${t.manufacturer??""} ${t.model??""}`.toLowerCase();
       return okCat && okStatus && (!kw || hay.includes(kw));
     });
@@ -65,23 +68,23 @@ export default function Tools(){
           <Link to="/" className="btn-ghost text-sm px-3 py-2">
             🏠 홈
           </Link>
-          <div className="text-white text-xl font-black tracking-tight ml-2 mr-auto">🔍 공구 둘러보기</div>
-          <Link to="/my-loans" className="btn-blue text-sm px-3 py-2 mr-2">
+          <div className="text-white text-xl font-black tracking-tight flex-1">🔍 공구 둘러보기</div>
+          <Link to="/my-loans" className="btn-blue text-sm px-2 py-1 whitespace-nowrap">
             📦 나의 대출현황
           </Link>
-          <Link to="/available-tools" className="btn-red-outline text-sm px-3 py-2">
-            🔧 공구사용
+          <Link to="/available-tools" className="btn-red-outline text-sm px-2 py-1 whitespace-nowrap">
+            🔧 사용
           </Link>
         </div>
         
         {/* 필터 */}
         <div className="max-w-screen-sm mx-auto px-3 pb-3 space-y-2">
           <div className="flex gap-2">
-            <select className="pill flex-1" value={cat} onChange={e=>setCat(e.target.value)}>
-              {cats.map(c=><option key={c} value={c}>{c}</option>)}
+            <select className="pill flex-1 bg-gray-700 text-white" value={cat} onChange={e=>setCat(e.target.value)}>
+              {cats.map(c=><option key={c} value={c} className="bg-gray-700 text-white">{c}</option>)}
             </select>
-            <select className="pill flex-1" value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}>
-              {statusOptions.map(s=><option key={s} value={s}>{s}</option>)}
+            <select className="pill flex-1 bg-gray-700 text-white" value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}>
+              {statusOptions.map(s=><option key={s} value={s} className="bg-gray-700 text-white">{s}</option>)}
             </select>
           </div>
           <input
@@ -95,7 +98,7 @@ export default function Tools(){
       {/* 리스트 */}
       <main className="max-w-screen-sm mx-auto px-2 pb-28 space-y-2">
         <div className="text-center py-2">
-          <span className="text-white/60 text-sm">총 {filtered.length}개 공구</span>
+          <span className="text-emerald-400 text-sm font-semibold">총 {filtered.length}개 공구</span>
         </div>
         
         {filtered.map(t=>(

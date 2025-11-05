@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev-safe": "powershell -Command \"netstat -ano | Select-String ':5000 ' | ForEach-Object { $_.Line.Split(' ')[-1] } | ForEach-Object { if($_ -match '[0-9]+') { taskkill /F /PID $_ 2>$null } }; Start-Sleep 1; vite\"",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"

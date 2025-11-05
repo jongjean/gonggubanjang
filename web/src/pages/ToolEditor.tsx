@@ -12,15 +12,34 @@ type Tool = {
 
 const fileOnly = (p?:string)=> p? p.replace(/^.*[\\/]/,"") : "";
 const imgSrc = (p?:string, tempImageName?:string, tempDataURL?:string)=> {
-  if (tempDataURL) {
-    // DataURL이 있으면 우선 사용 (가장 안정적)
+  console.log('🔍 imgSrc called with:', {
+    imageUrl: p,
+    tempImageName: tempImageName,
+    tempDataURL: tempDataURL ? tempDataURL.substring(0, 50) + '...' : null
+  });
+  
+  // 임시 이미지가 있으면 우선 사용 (서버에 업로드된 안정적인 이미지)
+  if (tempImageName) {
+    const tempUrl = `/temp/${tempImageName}`;
+    console.log('�️ Using temp image:', tempUrl);
+    return tempUrl;
+  }
+  
+  // tempImageName이 없고 tempDataURL이 있는 경우에만 DataURL 사용
+  if (tempDataURL && !tempDataURL.startsWith('blob:')) {
+    // DataURL이 있으면 사용 (단, blob URL은 제외)
+    console.log('� Using tempDataURL (not blob)');
     return tempDataURL;
   }
-  if (tempImageName) {
-    // 임시 이미지인 경우
-    return `/temp/${tempImageName}`;
+  
+  if (p) {
+    const toolUrl = `/tools/${fileOnly(p)}`;
+    console.log('📁 Using tools image:', toolUrl);
+    return toolUrl;
   }
-  return p? `/tools/${fileOnly(p)}` : "";
+  
+  console.log('❌ No image source available');
+  return "";
 };
 
 export default function ToolEditor(){
@@ -45,6 +64,8 @@ export default function ToolEditor(){
     if (isTemp === 'true') {
       // 임시 데이터에서 편집 시작
       const tempDataStr = localStorage.getItem('temp-edit-data');
+      console.log('🔍 Checking temp data:', tempDataStr ? 'found' : 'not found');
+      
       if (tempDataStr) {
         try {
           const tempData = JSON.parse(tempDataStr);
@@ -52,8 +73,40 @@ export default function ToolEditor(){
           console.log('🖼️ Temp image info:', {
             tempImageId: tempData.tempImageId,
             tempImageName: tempData.tempImageName,
-            imageUrl: tempData.imageUrl
+            imageUrl: tempData.imageUrl,
+            tempDataURL: tempData.tempDataURL ? tempData.tempDataURL.substring(0, 50) + '...' : null
           });
+          
+          // 임시 이미지 URL 접근성 테스트
+          if (tempData.tempImageName) {
+            const testUrl = `/temp/${tempData.tempImageName}`;
+            console.log('🧪 Testing temp image URL:', testUrl);
+            
+            // 직접 fetch로 이미지 존재 확인
+            fetch(testUrl, { method: 'HEAD' })
+              .then(response => {
+                console.log('🌐 Temp image HEAD request result:', {
+                  status: response.status,
+                  ok: response.ok,
+                  headers: Object.fromEntries(response.headers.entries())
+                });
+                
+                if (response.ok) {
+                  console.log('✅ Temp image accessible via fetch');
+                } else {
+                  console.error('❌ Temp image not found on server:', response.status);
+                }
+              })
+              .catch(error => {
+                console.error('❌ Temp image fetch failed:', error);
+              });
+            
+            // 이미지 로드 테스트
+            const testImg = new Image();
+            testImg.onload = () => console.log('✅ Temp image loaded via Image()');
+            testImg.onerror = (e) => console.error('❌ Temp image load failed via Image():', e);
+            testImg.src = testUrl;
+          }
           
           setEditData(tempData);
           setEditMode(true);
@@ -104,6 +157,14 @@ export default function ToolEditor(){
       const isNewTool = !editData.id || editData.id.startsWith('temp_') || !tools.find(t => t.id === editData.id);
       
       if (isNewTool) {
+        console.log('💾 Saving new tool with data:', {
+          id: editData.id,
+          name: editData.name,
+          tempImageId: editData.tempImageId,
+          tempImageName: editData.tempImageName,
+          hasTempDataURL: !!editData.tempDataURL
+        });
+        
         // 새 도구 생성
         const response = await fetch('/api/tools', {
           method: 'POST',
@@ -113,11 +174,16 @@ export default function ToolEditor(){
         
         if (response.ok) {
           const createdTool = await response.json();
+          console.log('✅ Tool created successfully:', createdTool);
           setTools(prev => [...prev, createdTool]);
           setEditMode(false);
           setEditData(null);
           setSel(createdTool);
           alert('새 공구가 등록되었습니다.');
+        } else {
+          const errorData = await response.json();
+          console.error('❌ Save failed:', errorData);
+          alert('저장 실패: ' + (errorData.error || response.statusText));
         }
       } else {
         // 기존 도구 업데이트
@@ -225,16 +291,19 @@ export default function ToolEditor(){
           <Link to="/" className="btn-ghost text-sm px-3 py-2">
             🏠 홈
           </Link>
-          <div className="text-white text-xl font-black tracking-tight ml-2 mr-auto">📝 공구 목록</div>
-          <Link to="/tools" className="btn-red-outline text-sm px-3 py-2">
+          <div className="text-white text-xl font-black tracking-tight flex-1">📝 공구 목록</div>
+          <Link to="/my-loans" className="btn-blue text-sm px-2 py-1 whitespace-nowrap">
+            � 나의 대출현황
+          </Link>
+          <Link to="/tools" className="btn-red-outline text-sm px-2 py-1 whitespace-nowrap">
             🔍 둘러보기
           </Link>
         </div>
         
         {/* 필터 */}
         <div className="max-w-screen-sm mx-auto px-3 pb-3 space-y-2">
-          <select className="pill w-full" value={cat} onChange={e=>setCat(e.target.value)}>
-            {cats.map(c=><option key={c} value={c}>{c}</option>)}
+          <select className="pill w-full bg-gray-700 text-white" value={cat} onChange={e=>setCat(e.target.value)}>
+            {cats.map(c=><option key={c} value={c} className="bg-gray-700 text-white">{c}</option>)}
           </select>
           <input
             className="w-full rounded-2xl px-3 py-2 bg-[var(--panel)] border border-[var(--line)] text-white placeholder:muted"
@@ -294,9 +363,64 @@ export default function ToolEditor(){
               <button className="sheet-close" onClick={()=>{setSel(null); setEditMode(false); setEditData(null);}} aria-label="닫기">✕</button>
 
               <div className="w-full h-56 bg-[#0f1318] rounded-2xl overflow-hidden flex items-center justify-center">
-                {(sel.imageUrl || sel.tempImageName || sel.tempDataURL)
-                  ? <img src={imgSrc(sel.imageUrl, sel.tempImageName, sel.tempDataURL)} alt={sel.name} className="object-contain max-h-full w-auto"/>
-                  : <span className="muted text-sm">이미지 없음</span>}
+                {(() => {
+                  // 편집 모드일 때는 editData 우선, 아니면 sel 사용
+                  const imageData = editMode && editData ? editData : sel;
+                  const hasImage = imageData.imageUrl || imageData.tempImageName || imageData.tempDataURL;
+                  const imageSrc = imgSrc(imageData.imageUrl, imageData.tempImageName, imageData.tempDataURL);
+                  
+                  console.log('🖼️ Image display check:', {
+                    editMode,
+                    hasEditData: !!editData,
+                    imageUrl: imageData.imageUrl,
+                    tempImageName: imageData.tempImageName,
+                    tempDataURL: imageData.tempDataURL ? imageData.tempDataURL.substring(0, 50) + '...' : null,
+                    hasImage,
+                    finalImageSrc: imageSrc
+                  });
+                  
+                  if (!hasImage) {
+                    return <span className="muted text-sm">이미지 없음</span>;
+                  }
+                  
+                  return (
+                    <img 
+                      src={imageSrc} 
+                      alt={imageData.name} 
+                      className="object-contain max-h-full w-auto"
+                      onLoad={() => {
+                        console.log('✅ Image loaded successfully:', imageSrc);
+                      }}
+                      onError={(e) => {
+                        console.error('❌ Image failed to load:', imageSrc, e);
+                        const imgElement = e.target as HTMLImageElement;
+                        
+                        // 무한 재시도 방지 - 이미 시도한 적이 있으면 더 이상 시도하지 않음
+                        if (imgElement.getAttribute('data-retry-attempted')) {
+                          console.log('🛑 Max retry reached for:', imageSrc);
+                          // 대체 이미지 표시 또는 에러 메시지
+                          imgElement.style.display = 'none';
+                          return;
+                        }
+                        
+                        // 임시 이미지 로드 실패 시 한 번만 재시도
+                        if (imageSrc.includes('/temp/')) {
+                          console.log('🔄 Attempting to reload temp image (one-time)...');
+                          imgElement.setAttribute('data-retry-attempted', 'true');
+                          
+                          // 잠시 후 다시 시도
+                          setTimeout(() => {
+                            imgElement.src = imageSrc + '?t=' + Date.now();
+                          }, 1000);
+                        }
+                      }}
+                      style={{ 
+                        backgroundColor: '#0f1318',
+                        minHeight: '100px' // 최소 높이 보장
+                      }}
+                    />
+                  );
+                })()}
               </div>
 
               <div className="mt-3 px-1">

@@ -42,6 +42,7 @@ app.get("/api/ai/status", (_req, res) => {
 });
 let tools = {};
 let loans = [];
+let myLoans = [];
 let incidents = [];
 // 데이터 파일 경로
 const TOOLS_DATA_FILE = path_1.default.join(TOOLS_DIR, "tools_data.json");
@@ -60,6 +61,7 @@ function loadDataFromFiles() {
         if (fs_1.default.existsSync(LOANS_DATA_FILE)) {
             const loansData = JSON.parse(fs_1.default.readFileSync(LOANS_DATA_FILE, "utf8"));
             loans = Array.isArray(loansData) ? loansData : [];
+            myLoans = [...loans]; // myLoans도 동일한 데이터로 초기화
             console.log(`✅ Loaded ${loans.length} loans from ${LOANS_DATA_FILE}`);
         }
         // 사건 데이터 로드
@@ -347,58 +349,96 @@ app.post("/api/tools/extract", upload.single("image"), async (req, res) => {
     }
 });
 // ------------------------------ CRUD / 로그 ------------------------------
-// 생성
-app.post("/api/tools", (req, res) => {
-    const id = req.body.id || "t_" + Date.now();
-    let finalImageUrl = "";
-    // 임시 이미지가 있으면 실제 tools 디렉토리로 이동
-    if (req.body.tempImageId && req.body.tempImageName) {
-        const tempImagePath = path_1.default.join(TEMP_IMAGES_DIR, req.body.tempImageName);
-        if (fs_1.default.existsSync(tempImagePath)) {
-            // 새로운 파일명 생성 (ID 기반)
-            const ext = path_1.default.extname(req.body.tempImageName);
+// 생성 (JSON과 FormData 모두 처리)
+app.post("/api/tools", upload.single("image"), (req, res) => {
+    try {
+        const id = "t_" + Date.now();
+        let finalImageUrl = "";
+        let toolData = {};
+        // FormData로 전송된 경우 data 필드에서 JSON 파싱
+        if (req.body.data) {
+            try {
+                toolData = JSON.parse(req.body.data);
+            }
+            catch (e) {
+                return res.status(400).json({ error: "Invalid JSON data in FormData" });
+            }
+        }
+        else {
+            // JSON으로 전송된 경우
+            toolData = req.body;
+        }
+        // 업로드된 이미지 처리
+        if (req.file) {
+            const ext = path_1.default.extname(req.file.originalname) || ".jpg";
             const finalImageName = `tool_${id}${ext}`;
             const finalImagePath = path_1.default.join(TOOLS_DIR, finalImageName);
             try {
-                // 임시 이미지를 실제 디렉토리로 이동
-                fs_1.default.copyFileSync(tempImagePath, finalImagePath);
-                fs_1.default.unlinkSync(tempImagePath);
+                // 업로드된 파일을 tools 디렉토리로 이동
+                fs_1.default.copyFileSync(req.file.path, finalImagePath);
+                fs_1.default.unlinkSync(req.file.path); // 임시 파일 삭제
                 finalImageUrl = finalImageName;
-                console.log(`📸 Image moved: ${req.body.tempImageName} → ${finalImageName}`);
+                console.log(`📸 New image uploaded: ${finalImageName}`);
             }
             catch (e) {
-                console.error("❌ Image move failed:", e.message);
+                console.error("❌ Image save failed:", e.message);
+                // 임시 파일 정리
+                try {
+                    fs_1.default.unlinkSync(req.file.path);
+                }
+                catch { }
+                return res.status(500).json({ error: "이미지 저장 실패" });
             }
         }
-    }
-    const tool = {
-        id,
-        ...req.body,
-        imageUrl: finalImageUrl, // 실제 이미지 URL 설정
-        requiredKeys: req.body.requiredKeys ?? ["name", "condition"],
-        hiddenKeys: req.body.hiddenKeys ?? [],
-        createdAt: new Date().toISOString(),
+        // 임시 이미지가 있으면 실제 tools 디렉토리로 이동
+        else if (toolData.tempImageId && toolData.tempImageName) {
+            const tempImagePath = path_1.default.join(TEMP_IMAGES_DIR, toolData.tempImageName);
+            if (fs_1.default.existsSync(tempImagePath)) {
+                const ext = path_1.default.extname(toolData.tempImageName);
+                const finalImageName = `tool_${id}${ext}`;
+                const finalImagePath = path_1.default.join(TOOLS_DIR, finalImageName);
+                try {
+                    fs_1.default.copyFileSync(tempImagePath, finalImagePath);
+                    fs_1.default.unlinkSync(tempImagePath);
+                    finalImageUrl = finalImageName;
+                    console.log(`📸 Image moved: ${toolData.tempImageName} → ${finalImageName}`);
+                }
+                catch (e) {
+                    console.error("❌ Image move failed:", e.message);
+                }
+            }
+        }
+        const tool = {
+            id,
+            ...toolData,
+            imageUrl: finalImageUrl,
+            requiredKeys: toolData.requiredKeys ?? ["name", "condition"],
+            hiddenKeys: toolData.hiddenKeys ?? [],
+            createdAt: new Date().toISOString(),
+        };
         // 임시 필드 제거
-        tempImageId: undefined,
-        tempImageName: undefined
-    };
-    // 임시 필드 완전 제거
-    delete tool.tempImageId;
-    delete tool.tempImageName;
-    tools[id] = tool;
-    // 신규 등록 활동 로그 추가
-    const newToolActivity = {
-        id: "i_" + Date.now(),
-        toolId: id,
-        type: "new",
-        description: `새 공구 등록: ${tool.name}`,
-        timestamp: new Date().toISOString()
-    };
-    incidents.push(newToolActivity);
-    // 파일에 저장
-    saveDataToFiles();
-    console.log(`📋 New tool saved: ${tool.name} (ID: ${id})`);
-    res.json(tool);
+        delete tool.tempImageId;
+        delete tool.tempImageName;
+        delete tool.tempDataURL;
+        tools[id] = tool;
+        // 신규 등록 활동 로그 추가
+        const newToolActivity = {
+            id: "i_" + Date.now(),
+            toolId: id,
+            type: "new",
+            description: `새 공구 등록: ${tool.name}`,
+            timestamp: new Date().toISOString()
+        };
+        incidents.push(newToolActivity);
+        // 파일에 저장
+        saveDataToFiles();
+        console.log(`📋 New tool saved: ${tool.name} (ID: ${id})`);
+        res.json(tool);
+    }
+    catch (error) {
+        console.error("❌ Tool creation failed:", error);
+        res.status(500).json({ error: "공구 생성 실패: " + error.message });
+    }
 });
 // 목록/상세
 app.get("/api/tools", (_req, res) => res.json(Object.values(tools)));
@@ -599,7 +639,6 @@ app.get("/api/tools", (_req, res) => {
     res.json(Object.values(tools));
 });
 // 대출 관련 API
-let myLoans = [];
 app.get("/api/my-loans", (_req, res) => {
     res.json(myLoans);
 });
@@ -621,6 +660,7 @@ app.post("/api/loans", (req, res) => {
             createdAt: new Date().toISOString()
         }));
         myLoans.push(...newLoans);
+        loans.push(...newLoans); // 전역 loans 배열에도 추가
         // 대출된 공구들을 대출중 상태로 변경
         toolIds.forEach((toolId) => {
             if (tools[toolId]) {
@@ -717,6 +757,47 @@ app.post("/api/incidents", (req, res) => {
     catch (error) {
         console.error("사고 기록 생성 실패:", error);
         res.status(500).json({ error: "사고 기록 생성에 실패했습니다." });
+    }
+});
+// 대출 상태 동기화 API
+app.post("/api/sync-loan-status", (req, res) => {
+    try {
+        // 현재 활성 대출 목록 가져오기
+        const activeToolIds = myLoans
+            .filter(loan => loan.status === "active")
+            .map(loan => loan.toolId);
+        let updatedCount = 0;
+        // 모든 공구 상태 동기화
+        Object.keys(tools).forEach(toolId => {
+            const tool = tools[toolId];
+            if (activeToolIds.includes(toolId)) {
+                // 실제 대출중인 공구는 대출중 상태로
+                if (tool.loanStatus !== "대출중") {
+                    tool.loanStatus = "대출중";
+                    tool.available = false;
+                    updatedCount++;
+                }
+            }
+            else {
+                // 대출 기록이 없는 공구는 대여가능 상태로
+                if (tool.loanStatus === "대출중") {
+                    delete tool.loanStatus;
+                    tool.available = true;
+                    updatedCount++;
+                }
+            }
+        });
+        saveDataToFiles();
+        res.json({
+            success: true,
+            message: `${updatedCount}개 공구 상태가 동기화되었습니다.`,
+            activeLoans: activeToolIds.length,
+            updatedTools: updatedCount
+        });
+    }
+    catch (error) {
+        console.error("대출 상태 동기화 실패:", error);
+        res.status(500).json({ error: "대출 상태 동기화에 실패했습니다." });
     }
 });
 // 서버 시작

@@ -102,6 +102,11 @@ export default function AvailableTools(){
             🏠 홈
           </Link>
           <div className="text-white text-xl font-black tracking-tight ml-2 mr-auto">🔧 공구 사용</div>
+          {cart.length === 0 && (
+            <Link to="/my-loans" className="btn-blue text-sm px-3 py-2">
+              📦 나의 대출현황
+            </Link>
+          )}
           {cart.length > 0 && (
             <button 
               className="btn-blue text-sm px-3 py-2 mr-2 relative"
@@ -117,8 +122,8 @@ export default function AvailableTools(){
         
         {/* 필터 */}
         <div className="max-w-screen-sm mx-auto px-3 pb-3 space-y-2">
-          <select className="pill w-full" value={cat} onChange={e=>setCat(e.target.value)}>
-            {cats.map(c=><option key={c} value={c}>{c}</option>)}
+          <select className="pill w-full bg-gray-700 text-white" value={cat} onChange={e=>setCat(e.target.value)}>
+            {cats.map(c=><option key={c} value={c} className="bg-gray-700 text-white">{c}</option>)}
           </select>
           <input
             className="w-full rounded-2xl px-3 py-2 bg-[var(--panel)] border border-[var(--line)] text-white placeholder:muted"

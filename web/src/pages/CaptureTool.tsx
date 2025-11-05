@@ -366,20 +366,62 @@ export default function CaptureTool() {
     if (!dataToSave) return;
     
     try {
-      const payload = {
-        ...dataToSave,
-        // 초기 기본값 보정
-        condition: dataToSave.condition ?? "used",
-        available: true,
-        loanStatus: "반납",
-        damaged: false,
-        repaired: false,
-      };
-      const r = await fetch("/api/tools", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      let payload;
+      let r;
+      
+      // 파일이 있는 경우 (카메라 촬영 or 파일 선택)
+      if (fileBlob) {
+        // FormData로 이미지와 함께 전송
+        const fd = new FormData();
+        fd.append("image", fileBlob);
+        
+        // 나머지 데이터는 JSON 문자열로 추가
+        const toolData = {
+          ...dataToSave,
+          condition: dataToSave.condition ?? "used",
+          available: true,
+          loanStatus: "반납",
+          damaged: false,
+          repaired: false,
+        };
+        
+        fd.append("data", JSON.stringify(toolData));
+        
+        r = await fetch("/api/tools", {
+          method: "POST",
+          body: fd, // FormData 사용
+        });
+      } else {
+        // 이미지가 없는 경우 JSON만 전송
+        payload = {
+          ...dataToSave,
+          condition: dataToSave.condition ?? "used",
+          available: true,
+          loanStatus: "반납",
+          damaged: false,
+          repaired: false,
+        };
+        
+        r = await fetch("/api/tools", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      }
+      
+      if (!r.ok) {
+        let errorMessage = `저장 실패: ${r.status} ${r.statusText}`;
+        try {
+          const errorData = await r.json();
+          if (errorData.error) {
+            errorMessage = errorData.error;
+          }
+        } catch {
+          // JSON 파싱 실패시 기본 메시지 사용
+        }
+        throw new Error(errorMessage);
+      }
+      
       const created = await r.json();
       
       // 저장 성공 후 실제 이미지 URL로 업데이트
@@ -406,6 +448,7 @@ export default function CaptureTool() {
       setFileBlob(null);
       setAnalysisError(null);
     } catch (e) {
+      console.error("❌ DB save failed:", e);
       alert("DB 저장 실패: " + (e as Error).message);
     }
   };
@@ -516,12 +559,37 @@ export default function CaptureTool() {
 
   // 6) 수동 입력을 위해 이미지만 임시 저장 후 편집 페이지로 이동
   const saveImageOnly = async () => {
-    if (!fileBlob) return;
-    
     try {
-      // 1. 먼저 이미지만 임시 업로드 (DB에 저장하지 않음)
+      console.log('📤 Starting manual entry image upload...');
+      console.log('🔍 Image source check:', {
+        hasFileBlob: !!fileBlob,
+        hasPhotoURL: !!photoURL,
+        photoURLType: photoURL?.startsWith('data:') ? 'DataURL' : photoURL?.startsWith('blob:') ? 'BlobURL' : 'other'
+      });
+      
+      let imageFile: File;
+      
+      // 1. 이미지 소스 확인 및 File 객체 생성
+      if (fileBlob) {
+        // 파일 선택이나 카메라에서 이미 File 객체가 있는 경우
+        console.log('📁 Using existing fileBlob');
+        imageFile = fileBlob;
+      } else if (photoURL && photoURL.startsWith('data:')) {
+        // 카메라 촬영으로 DataURL만 있는 경우 - DataURL을 Blob으로 변환
+        console.log('� Converting DataURL to File...');
+        
+        const response = await fetch(photoURL);
+        const blob = await response.blob();
+        imageFile = new File([blob], 'camera-capture.jpg', { type: 'image/jpeg' });
+        
+        console.log('✅ DataURL converted to File:', imageFile.size, 'bytes');
+      } else {
+        throw new Error('업로드할 이미지가 없습니다. 다시 촬영하거나 파일을 선택해주세요.');
+      }
+      
+      // 2. 이미지를 임시 업로드 (DB에 저장하지 않음)
       const fd = new FormData();
-      fd.append("image", fileBlob);
+      fd.append("image", imageFile);
       fd.append("tempOnly", "true"); // 임시 저장 플래그
       
       const uploadRes = await fetch("/api/tools/upload-temp", { 
@@ -530,12 +598,14 @@ export default function CaptureTool() {
       });
       
       if (!uploadRes.ok) {
-        throw new Error("이미지 업로드 실패");
+        const errorData = await uploadRes.json();
+        throw new Error(errorData.error || "이미지 업로드 실패");
       }
       
       const uploadResult = await uploadRes.json();
+      console.log('📸 Temp image uploaded:', uploadResult);
       
-      // 2. 기본 데이터와 이미지 정보를 localStorage에 임시 저장
+      // 3. 기본 데이터와 이미지 정보를 localStorage에 임시 저장
       const tempData = {
         name: "새 공구 (정보 입력 필요)",
         category: "기타",
@@ -547,20 +617,20 @@ export default function CaptureTool() {
         confidence: 0,
         tempImageId: uploadResult.tempImageId,
         tempImageName: uploadResult.tempImageName,
-        tempDataURL: photoURL, // 현재 DataURL도 저장
       };
       
       localStorage.setItem('temp-edit-data', JSON.stringify(tempData));
-      console.log('💾 Manual entry data with DataURL saved:', tempData);
+      console.log('💾 Manual entry data saved:', tempData);
       
       // blob URL 해제 (메모리 정리)
       if (photoURL && photoURL.startsWith('blob:')) {
         URL.revokeObjectURL(photoURL);
       }
       
-      // 3. 수정 페이지로 이동 (실제 DB 저장은 하지 않음)
+      // 4. 수정 페이지로 이동 (실제 DB 저장은 하지 않음)
       window.location.href = `/tool-editor?temp=true`;
     } catch (e) {
+      console.error('❌ Manual entry save failed:', e);
       alert("임시 저장 실패: " + (e as Error).message);
     }
   };
