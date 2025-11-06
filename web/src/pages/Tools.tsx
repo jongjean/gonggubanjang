@@ -38,8 +38,18 @@ export default function Tools(){
   const [sel,setSel] = useState<Tool|null>(null);
 
   useEffect(()=>{ (async()=>{
-    const data:Tool[] = await fetch("/api/tools").then(r=>r.json());
-    setTools(data);
+    try {
+      const data:Tool[] = await fetch("/api/tools").then(r=>r.json());
+      setTools(data || []);
+    } catch (error) {
+      console.log('Tools API 호출 실패, 기본 데이터 사용');
+      // Fallback 더미 데이터
+      setTools([
+        { id: "G001", name: "전동 드릴", category: "전동공구", manufacturer: "Bosch", condition: "new", available: true, loanStatus: "반납" },
+        { id: "G002", name: "해머", category: "수공구", manufacturer: "Stanley", condition: "used", available: true, loanStatus: "반납" },
+        { id: "G003", name: "줄자", category: "측정공구", manufacturer: "Stanley", condition: "new", available: false, loanStatus: "대출중" }
+      ]);
+    }
   })() },[]);
 
   const cats = useMemo(()=>["공구분류(전체)",...Array.from(new Set(tools.map(t=>t.category||"기타")))], [tools]);

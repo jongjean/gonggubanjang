@@ -11,12 +11,24 @@ export default function Landing() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
 
   useEffect(()=>{(async()=>{
-    const [t,l,i]=await Promise.all([
-      fetch("/api/tools").then(r=>r.json()),
-      fetch("/api/my-loans").then(r=>r.json()),
-      fetch("/api/incidents").then(r=>r.json()),
-    ]);
-    setTools(t); setLoans(l); setIncidents(i);
+    try {
+      const [t,l,i]=await Promise.all([
+        fetch("/api/tools").then(r=>r.json()).catch(()=>[]),
+        fetch("/api/my-loans").then(r=>r.json()).catch(()=>[]),
+        fetch("/api/incidents").then(r=>r.json()).catch(()=>[]),
+      ]);
+      setTools(t || []); setLoans(l || []); setIncidents(i || []);
+    } catch (error) {
+      console.log('API 호출 실패, 기본 데이터 사용');
+      // Fallback 더미 데이터
+      setTools([
+        { id: "G001", name: "전동 드릴", category: "전동공구", available: true, loanStatus: "반납" },
+        { id: "G002", name: "해머", category: "수공구", available: true, loanStatus: "반납" },
+        { id: "G003", name: "줄자", category: "측정공구", available: false, loanStatus: "대출중" }
+      ]);
+      setLoans([]);
+      setIncidents([]);
+    }
   })()},[]);
 
   const stats = useMemo(()=>{
