@@ -45,3 +45,5 @@ logs
 
 # API 폴더 임시 제외 (Vercel 배포 에러 방지)
 api/
+
+.vercel
