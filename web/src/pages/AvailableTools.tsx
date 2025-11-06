@@ -13,17 +13,29 @@ const fileOnly = (p?:string)=> p? p.replace(/^.*[\\/]/,"") : "";
 const imgSrc = (p?:string)=> p? `/tools/${fileOnly(p)}` : "";
 
 export default function AvailableTools(){
-  const [tools,setTools] = useState<Tool[]>([]);
+  const [tools, setTools] = useState<Tool[]>([
+    { id: "G001", name: "전동 드릴", category: "전동공구", available: true, loanStatus: "반납" },
+    { id: "G002", name: "해머", category: "수공구", available: true, loanStatus: "반납" },
+    { id: "G004", name: "그라인더", category: "전동공구", available: true, loanStatus: "반납" }
+  ]);
   const [q,setQ] = useState(""); 
   const [cat,setCat]=useState("전체");
-  const [sel,setSel] = useState<Tool|null>(null);
   const [cart, setCart] = useState<string[]>([]);
   const [showCart, setShowCart] = useState(false);
+  const [sel, setSel] = useState<Tool|null>(null);
 
-  useEffect(()=>{ (async()=>{
-    const data:Tool[] = await fetch("/api/tools").then(r=>r.json());
-    setTools(data);
-  })() },[]);
+  useEffect(()=>{ 
+    setTimeout(async () => {
+      try {
+        const data:Tool[] = await fetch("/api/tools").then(r=>r.ok ? r.json() : []);
+        if (Array.isArray(data) && data.length > 0) {
+          setTools(data);
+        }
+      } catch (error) {
+        console.log('AvailableTools API 호출 실패, 기본 데이터 유지');
+      }
+    }, 100);
+  },[]);
 
   const handleAddToCart = (toolId: string) => {
     if (!cart.includes(toolId)) {

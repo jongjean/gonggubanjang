@@ -6,30 +6,39 @@ type Loan = { id:string; toolId:string; startDate:string; endDate:string; status
 type Incident = { id:string; toolId:string; type:string; timestamp:string };
 
 export default function Landing() {
-  const [tools, setTools] = useState<Tool[]>([]);
+  // 초기 상태를 기본 데이터로 설정
+  const [tools, setTools] = useState<Tool[]>([
+    { id: "G001", name: "전동 드릴", category: "전동공구", available: true, loanStatus: "반납" },
+    { id: "G002", name: "해머", category: "수공구", available: true, loanStatus: "반납" },
+    { id: "G003", name: "줄자", category: "측정공구", available: false, loanStatus: "대출중" },
+    { id: "G004", name: "그라인더", category: "전동공구", available: true, loanStatus: "반납" },
+    { id: "G005", name: "안전모", category: "안전용품", available: true, loanStatus: "반납" }
+  ]);
   const [loans, setLoans] = useState<Loan[]>([]);
   const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(()=>{(async()=>{
-    try {
-      const [t,l,i]=await Promise.all([
-        fetch("/api/tools").then(r=>r.json()).catch(()=>[]),
-        fetch("/api/my-loans").then(r=>r.json()).catch(()=>[]),
-        fetch("/api/incidents").then(r=>r.json()).catch(()=>[]),
-      ]);
-      setTools(t || []); setLoans(l || []); setIncidents(i || []);
-    } catch (error) {
-      console.log('API 호출 실패, 기본 데이터 사용');
-      // Fallback 더미 데이터
-      setTools([
-        { id: "G001", name: "전동 드릴", category: "전동공구", available: true, loanStatus: "반납" },
-        { id: "G002", name: "해머", category: "수공구", available: true, loanStatus: "반납" },
-        { id: "G003", name: "줄자", category: "측정공구", available: false, loanStatus: "대출중" }
-      ]);
-      setLoans([]);
-      setIncidents([]);
-    }
-  })()},[]);
+  useEffect(()=>{
+    // 즉시 렌더링을 위해 setTimeout 사용
+    setTimeout(async () => {
+      try {
+        const [t,l,i] = await Promise.all([
+          fetch("/api/tools").then(r=>r.ok ? r.json() : []).catch(()=>[]),
+          fetch("/api/my-loans").then(r=>r.ok ? r.json() : []).catch(()=>[]),
+          fetch("/api/incidents").then(r=>r.ok ? r.json() : []).catch(()=>[]),
+        ]);
+        
+        // API 데이터가 있으면 업데이트, 없으면 기본 데이터 유지
+        if (Array.isArray(t) && t.length > 0) setTools(t);
+        if (Array.isArray(l)) setLoans(l);
+        if (Array.isArray(i)) setIncidents(i);
+      } catch (error) {
+        console.log('API 호출 실패, 기본 데이터 유지');
+      } finally {
+        setLoading(false);
+      }
+    }, 100);
+  },[]);
 
   const stats = useMemo(()=>{
     const total = tools.length;

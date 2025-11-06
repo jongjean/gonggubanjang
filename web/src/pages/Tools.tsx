@@ -31,26 +31,31 @@ const getStatusText = (tool: Tool) => {
 };
 
 export default function Tools(){
-  const [tools,setTools] = useState<Tool[]>([]);
+  // 초기 상태를 기본 데이터로 설정
+  const [tools,setTools] = useState<Tool[]>([
+    { id: "G001", name: "전동 드릴", category: "전동공구", manufacturer: "Bosch", condition: "new", available: true, loanStatus: "반납" },
+    { id: "G002", name: "해머", category: "수공구", manufacturer: "Stanley", condition: "used", available: true, loanStatus: "반납" },
+    { id: "G003", name: "줄자", category: "측정공구", manufacturer: "Stanley", condition: "new", available: false, loanStatus: "대출중" },
+    { id: "G004", name: "그라인더", category: "전동공구", manufacturer: "Bosch", condition: "new", available: true, loanStatus: "반납" },
+    { id: "G005", name: "안전모", category: "안전용품", manufacturer: "3M", condition: "new", available: true, loanStatus: "반납" }
+  ]);
   const [q,setQ] = useState(""); 
   const [cat,setCat]=useState("공구분류(전체)");
   const [statusFilter, setStatusFilter] = useState("공구현황(전체)");
   const [sel,setSel] = useState<Tool|null>(null);
 
-  useEffect(()=>{ (async()=>{
-    try {
-      const data:Tool[] = await fetch("/api/tools").then(r=>r.json());
-      setTools(data || []);
-    } catch (error) {
-      console.log('Tools API 호출 실패, 기본 데이터 사용');
-      // Fallback 더미 데이터
-      setTools([
-        { id: "G001", name: "전동 드릴", category: "전동공구", manufacturer: "Bosch", condition: "new", available: true, loanStatus: "반납" },
-        { id: "G002", name: "해머", category: "수공구", manufacturer: "Stanley", condition: "used", available: true, loanStatus: "반납" },
-        { id: "G003", name: "줄자", category: "측정공구", manufacturer: "Stanley", condition: "new", available: false, loanStatus: "대출중" }
-      ]);
-    }
-  })() },[]);
+  useEffect(()=>{ 
+    setTimeout(async () => {
+      try {
+        const data:Tool[] = await fetch("/api/tools").then(r=>r.ok ? r.json() : []);
+        if (Array.isArray(data) && data.length > 0) {
+          setTools(data);
+        }
+      } catch (error) {
+        console.log('Tools API 호출 실패, 기본 데이터 유지');
+      }
+    }, 100);
+  },[]);
 
   const cats = useMemo(()=>["공구분류(전체)",...Array.from(new Set(tools.map(t=>t.category||"기타")))], [tools]);
   const statusOptions = ["공구현황(전체)", "정상", "대여중", "파손", "수리중", "수리완료", "폐기"];
