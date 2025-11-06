@@ -3,16 +3,5 @@
   "buildCommand": "cd web && npm install && npm run build",
   "outputDirectory": "web/dist",
   "installCommand": "npm install",
-  "devCommand": "cd web && npm run dev",
-  "functions": {
-    "api/*.ts": {
-      "runtime": "@vercel/node"
-    }
-  },
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/$1"
-    }
-  ]
+  "devCommand": "cd web && npm run dev"
 }
